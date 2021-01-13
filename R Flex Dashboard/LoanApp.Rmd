@@ -1,0 +1,269 @@
+---
+title: "Loan Application Dashboard"
+author: "Dustin T."
+date: "2021 M01 8"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: ["twitter", "facebook","menu","github","linkedin"]
+    source_code: embed
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(knitr)
+library(DT)
+library(rpivotTable)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(openintro)
+library(highcharter)
+library(ggvis)
+# Machine learnning method packages
+library(ROCR)
+library(pROC)
+library(caret)
+library(MASS)
+#library(sjPlot)
+```
+
+```{r readDat}
+data <- read.csv("train.csv")
+#preprocess data
+var.has.na <- lapply(data, function(x){any(is.na(x))})
+num_na <- which( var.has.na == TRUE )	
+per_na <- num_na/dim(data)[1] 
+data <- data[complete.cases(data),]
+```
+
+```{r}
+mycolors <- c("blue", "#FFC125", "darkgreen", "darkorange")
+```
+
+Data Viz {data-icon="fa-globe"}
+==========================================
+
+Row
+------------------------------------------
+
+
+### Credit History and Status.
+
+```{r introduction}
+valueBox(paste("Loaning System"),
+         color = "warning")
+```
+
+
+### Bank Customers
+
+```{r total_customers}
+valueBox(length(data$Loan_ID),
+         icon = 'fa-user')
+```
+
+
+### **Mean Applicant's Income**
+
+```{r somegauges}
+gauge(round(mean(data$ApplicantIncome),
+            digits = 2),
+            min = 0,
+            max = max(data$ApplicantIncome),
+            gaugeSectors(success = c(4000,6000),
+                         warning = c(2000,4000),
+                         danger = c(0,2000),
+                         colors = c('blue','yellow', 'red')))
+```
+
+
+### Members have Pending Loans.
+
+```{r}
+valueBox(sum(data$Loan_Status == "Y"),
+         icon = 'fa-user-times')
+```
+
+
+### Members have no loans.
+
+```{r Loan_status}
+valueBox(sum(data$Loan_Status == "N"),
+         icon = 'fa-user-plus')
+
+```
+
+
+### Members with a Good Credit History
+
+```{r Credit History}
+valueBox(sum(data$Credit_History == 1),
+         icon = 'fa-user-plus')
+
+```
+
+
+### Members with a Bad Credit History
+
+```{r Florida}
+valueBox(sum(data$Credit_History == 0),
+         icon = 'fa-user-times')
+```
+
+
+Row
+----------------------------------
+
+
+### Loan Amount Term
+
+```{r term}
+p1 <- data %>%
+  group_by(Loan_Amount_Term) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  plot_ly(x = ~Loan_Amount_Term,
+          y = ~count,
+          color = "cyan",
+          type = 'bar') %>%
+  layout(xaxis = list(title="Loaning Duration"),
+       yaxis = list(title="Count"))
+
+
+p1
+```
+
+
+### Piechart of loan status
+
+```{r pie1}
+p2 <- data %>%
+  group_by(Loan_Status) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  plot_ly(labels = ~Loan_Status,
+          values = ~count,
+          marker = list(colors = mycolors)) %>%
+  add_pie(hole = .2) %>%
+  layout(xaxis = list(zeroline = F,
+                      showline = F,
+                      showticklabels = F,
+                      showgrid = F),
+         yaxis = list(zeroline = F,
+                      showline = F,
+                      showticklabels = F,
+                      showgrid=F))
+
+
+p2
+
+```
+
+
+### Piechart of Credit History
+
+```{r boxplot}
+p2 <- data %>%
+  group_by(Credit_History) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  plot_ly(labels = ~Credit_History,
+          values = ~count,
+          marker = list(colors = mycolors)) %>%
+  add_pie(hole = .2) %>%
+  layout(xaxis = list(zeroline = F,
+                      showline = F,
+                      showticklabels = F,
+                      showgrid = F),
+         yaxis = list(zeroline = F,
+                      showline = F,
+                      showticklabels = F,
+                      showgrid=F))
+
+
+
+p2
+
+```
+
+### Scatter plot.
+
+```{r}
+p4 <- plot_ly(data, x =~ApplicantIncome) %>%
+  add_markers(y = ~LoanAmount,
+              text = ~paste("Loan Amount: ", LoanAmount),
+              showlegend = F) %>%
+  add_lines(y = ~fitted(loess(LoanAmount ~ApplicantIncome)),
+            name = "Loess Smoother",
+            color = I("#FFC125"),
+            showlegend = T,
+            line = list(width = 5)) %>%
+  layout(xaxis = list(title="ApplicantIncome"),
+         yaxis = list(title= "LoanAmount"))
+p4
+
+```
+
+
+Data Table {data-icon="fa-wrench"}
+===========================================
+```{r}
+datatable(data,
+          caption = "Loan Credit History",
+          rownames = T,
+          filter = "top",
+          options = list(pageLength = 100))
+```
+
+Pivot Table {data-icon="fa-sort-amount-desc"}
+=============================================
+```{r}
+rpivotTable(data[,-1], 
+            aggregatorName = "Count",
+            cols = "Credit_History",
+            rows = "Loan_Status",
+            rendererName = "Heatmap")
+```
+
+SummaryReport {data-orientation=columns, data-icon="fa-diamond"} 
+============================================
+Column { data-width = 50}
+----------------------------------------
+
+### Max Loan Amount Term
+
+```{r}
+valueBox(max(data$Loan_Amount_Term),
+         icon = "fa-user")
+```
+
+### Average Applicant's Income
+
+```{r}
+valueBox(round(mean(data$ApplicantIncome),
+               digits = 2),
+         icon = "fa-area-chart")
+```
+
+### Relationship between Credit History and Loan Status.
+
+```{r}
+datatable(as.data.frame(table(history=data$Credit_History,status=data$Loan_Status)))
+```
+
+Column 
+-------------------------------------------
+Report
+
+* This is a report on `r length(data$Loan_ID)` bank Lonees.
+
+* The average Applicant Income was `r mean(data$ApplicantIncome)`.
+
+* The average Loan Amount was `r mean(data$LoanAmount)`.
+
+This report was generated on `r format(Sys.Date(), format = "%B %d, %Y")`.
+
+
